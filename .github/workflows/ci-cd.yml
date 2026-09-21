@@ -42,20 +42,24 @@ jobs:
           -Dsonar.organization=${{ env.SONAR_ORG }}
           -Dsonar.host.url=https://sonarcloud.io
 
-      - name: Set up JFrog CLI
-        uses: jfrog/setup-jfrog-cli@v4
+      - name: Upload JAR to JFrog Artifactory
         env:
           JF_URL: ${{ secrets.JF_URL }}
           JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
-
-      - name: Upload JAR to JFrog Artifactory
-        run: jf rt upload "target/*.jar" "${{ env.JFROG_MAVEN_REPO }}/${{ github.ref_name }}/${{ github.sha }}/"
+        run: |
+          JAR=$(ls target/*.jar | head -n 1)
+          curl -f -H "Authorization: Bearer $JF_ACCESS_TOKEN" \
+            -T "$JAR" \
+            "$JF_URL/artifactory/$JFROG_MAVEN_REPO/$GITHUB_REF_NAME/$GITHUB_SHA/$(basename "$JAR")"
 
       - name: Log in to JFrog Docker registry
-        run: echo "${{ secrets.JF_ACCESS_TOKEN }}" | docker login ${{ env.JFROG_HOST }} -u "${{ secrets.JF_USER }}" --password-stdin
+        env:
+          JF_USER: ${{ secrets.JF_USER }}
+          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
+        run: echo "$JF_ACCESS_TOKEN" | docker login "$JFROG_HOST" -u "$JF_USER" --password-stdin
 
       - name: Build Docker image
-        run: docker build -t ${{ env.JFROG_HOST }}/${{ env.JFROG_DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+        run: docker build -t "$JFROG_HOST/$JFROG_DOCKER_REPO/$IMAGE_NAME:$GITHUB_SHA" .
 
       - name: Push Docker image to JFrog
-        run: docker push ${{ env.JFROG_HOST }}/${{ env.JFROG_DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        run: docker push "$JFROG_HOST/$JFROG_DOCKER_REPO/$IMAGE_NAME:$GITHUB_SHA"
